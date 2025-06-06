@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Descifrar Imagen</title>
+</head>
+<body style="font-family: Arial; background-color: #f9f9f9; padding: 30px;">
+    <h1>🔓 Recuperar Imagen Cifrada</h1>
+
+    <form id="formDescifrar">
+        <label>Usuario:</label><br>
+        <input type="text" name="usuario" required><br><br>
+
+        <label>Nombre de la imagen:</label><br>
+        <input type="text" name="nombre_imagen" required><br><br>
+
+        <label>Llave AES:</label><br>
+        <input type="password" name="llave" required><br><br>
+
+        <button type="submit">Descifrar imagen</button>
+    </form>
+
+    <div id="resultado" style="margin-top: 20px;"></div>
+    <br>
+    <a href="/">🔙 Volver al inicio</a>
+
+    <script>
+        const form = document.getElementById('formDescifrar');
+        const resultado = document.getElementById('resultado');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const datos = new FormData(form);
+            const res = await fetch('/descifrar', {
+                method: 'POST',
+                body: datos
+            });
+            const json = await res.json();
+            if (json.error) {
+                resultado.innerText = json.error;
+            } else {
+                resultado.innerHTML = `<h3>Resultado:</h3><img src="data:image/png;base64,${json.imagen}" width="300" />`;
+            }
+        });
+    </script>
+</body>
+</html>
