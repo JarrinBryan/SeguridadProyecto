@@ -96,20 +96,23 @@ def descifrar():
 
     try:
         token = request.form['token']
+        usuario = request.form['usuario']
         nombre_imagen = request.form['nombre_imagen']
         llave = request.form['llave']
 
-        usuario = obtener_usuario_desde_token(token)
-        if not usuario:
-            return jsonify({'error': 'Token inválido o expirado'}), 401
+        # Validar el token
+        datos = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        if datos['usuario'] != usuario:
+            return jsonify({'error': 'El token no pertenece a ese usuario.'}), 403
 
+        # Buscar la imagen cifrada
         doc = coleccion.find_one({
             'usuario': usuario,
             'nombre_imagen': nombre_imagen
         })
 
         if not doc:
-            return jsonify({'error': 'Imagen no encontrada para ese usuario'}), 404
+            return jsonify({'error': 'Imagen no encontrada para ese usuario.'}), 404
 
         cifrada = doc['imagen_cifrada']
         imagen_bytes = descifrar_imagen(cifrada, llave)
@@ -117,9 +120,14 @@ def descifrar():
         imagen_base64 = base64.b64encode(imagen_bytes).decode('utf-8')
         return jsonify({'imagen': imagen_base64})
 
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': '❌ El token ha expirado. Inicia sesión nuevamente.'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': '❌ Token inválido. Verifica tu autenticación.'}), 401
     except Exception as e:
         print("Error al descifrar:", e)
-        return jsonify({'error': 'No se pudo descifrar. ¿La llave es correcta o el token válido?'}), 400
+        return jsonify({'error': '❌ No se pudo descifrar. ¿La llave es correcta?'}), 400
+
 
 # === Ejecutar servidor Flask ===
 if __name__ == '__main__':
