@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Historial de Imágenes Cifradas</title>
+</head>
+<body style="font-family: Arial; background-color: #f0f0f0; padding: 30px;">
+
+  <h1>📂 Historial de Imágenes Cifradas</h1>
+
+  {% if documentos %}
+  <ul>
+    {% for doc in documentos %}
+    <li style="background-color: white; margin: 10px 0; padding: 10px; border: 1px solid #ccc;">
+      <strong>🧑 Usuario:</strong> {{ doc.usuario }}<br>
+      <strong>📁 Nombre de imagen:</strong> {{ doc.nombre_imagen }}<br>
+      <strong>🔒 Imagen cifrada:</strong><br>
+      <textarea rows="3" cols="80" readonly>{{ doc.imagen_cifrada }}</textarea><br>
+      <strong>📅 Fecha:</strong> {{ doc.fecha }}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+    <p>No hay imágenes cifradas aún.</p>
+  {% endif %}
+
+  <a href="/">🔙 Volver al inicio</a>
+</body>
+</html>
