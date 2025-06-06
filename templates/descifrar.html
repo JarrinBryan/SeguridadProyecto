@@ -4,58 +4,24 @@
     <meta charset="UTF-8">
     <title>Descifrar Imagen</title>
 </head>
-<body style="font-family: Arial; background-color: #f9f9f9; padding: 30px;">
-    <h1>🔓 Recuperar Imagen Cifrada</h1>
+<body>
+    <h1>🔓 Recuperar Imagen</h1>
+    <form method="POST">
+        <label>Token (JWT):</label><br>
+        <textarea name="token" rows="3" cols="60" required></textarea><br><br>
 
-    <form id="formDescifrar">
-        <label>Usuario:</label><br>
+        <label>Nombre de usuario:</label><br>
         <input type="text" name="usuario" required><br><br>
 
         <label>Nombre de la imagen:</label><br>
         <input type="text" name="nombre_imagen" required><br><br>
 
-        <label>Llave AES:</label><br>
+        <label>Llave de descifrado (AES):</label><br>
         <input type="password" name="llave" required><br><br>
 
-        <button type="submit">Descifrar imagen</button>
+        <button type="submit">Descifrar Imagen</button>
     </form>
 
-    <form method="post">
-    <label for="token">Token JWT:</label>
-    <input type="text" name="token" required><br><br>
-
-    <label for="nombre_imagen">Nombre de la imagen:</label>
-    <input type="text" name="nombre_imagen" required><br><br>
-
-    <label for="llave">Llave de cifrado (AES):</label>
-    <input type="password" name="llave" required><br><br>
-
-    <button type="submit">Descifrar imagen</button>
-</form>
-
-
-    <div id="resultado" style="margin-top: 20px;"></div>
-    <br>
-    <a href="/">🔙 Volver al inicio</a>
-
-    <script>
-        const form = document.getElementById('formDescifrar');
-        const resultado = document.getElementById('resultado');
-
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const datos = new FormData(form);
-            const res = await fetch('/descifrar', {
-                method: 'POST',
-                body: datos
-            });
-            const json = await res.json();
-            if (json.error) {
-                resultado.innerText = json.error;
-            } else {
-                resultado.innerHTML = `<h3>Resultado:</h3><img src="data:image/png;base64,${json.imagen}" width="300" />`;
-            }
-        });
-    </script>
+    <a href="/">← Volver al inicio</a>
 </body>
 </html>
