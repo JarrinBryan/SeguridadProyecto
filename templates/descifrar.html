@@ -20,6 +20,20 @@
         <button type="submit">Descifrar imagen</button>
     </form>
 
+    <form method="post">
+    <label for="token">Token JWT:</label>
+    <input type="text" name="token" required><br><br>
+
+    <label for="nombre_imagen">Nombre de la imagen:</label>
+    <input type="text" name="nombre_imagen" required><br><br>
+
+    <label for="llave">Llave de cifrado (AES):</label>
+    <input type="password" name="llave" required><br><br>
+
+    <button type="submit">Descifrar imagen</button>
+</form>
+
+
     <div id="resultado" style="margin-top: 20px;"></div>
     <br>
     <a href="/">🔙 Volver al inicio</a>

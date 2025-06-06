@@ -2,34 +2,36 @@ from flask import Flask, request, render_template, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 from pymongo import MongoClient
-from crypto import cifrar_imagen
+from crypto import cifrar_imagen, descifrar_imagen
 import os
-from datetime import datetime  # <--- arriba al inicio del archivo
-import certifi  # para conexión segura
+import certifi
+import base64
 from flask import send_file
 from io import BytesIO
-from crypto import descifrar_imagen  # asegúrate de importar
+from datetime import datetime, timedelta
+import jwt  # Asegúrate de que es de PyJWT, no del paquete 'jwt' incorrecto
 from bson import ObjectId
 
-# === Cargar variables del entorno ===
+# === Cargar variables de entorno ===
 load_dotenv()
 MONGO_URI = os.getenv("MONGO_URI")
+SECRET_KEY = "super_clave_segura_2025"
 
-# === Conectar con MongoDB con TLS ===
+# === Conectar a MongoDB Atlas de forma segura ===
 client = MongoClient(MONGO_URI, tlsCAFile=certifi.where())
 db = client['ProyectoS']
 coleccion = db['imagenes']
 
-# === Iniciar Flask ===
+# === Iniciar aplicación Flask ===
 app = Flask(__name__)
 CORS(app)
 
-# === Rutas ===
-
+# === Página principal ===
 @app.route('/')
 def index():
     return render_template('index.html')
 
+# === Cifrado de imagen ===
 @app.route('/cifrar', methods=['POST'])
 def cifrar():
     try:
@@ -52,32 +54,62 @@ def cifrar():
 
     except Exception as e:
         print("Error en /cifrar:", e)
-        return jsonify({'error': '❌ Ocurrió un error al cifrar o guardar la imagen.'}), 500
+        return jsonify({'error': '❌ Error al cifrar o guardar la imagen.'}), 500
 
+# === Historial de imágenes ===
 @app.route('/historial')
 def historial():
-    documentos = list(coleccion.find({}, {'_id': 0}))  # Excluimos _id
+    documentos = list(coleccion.find({}, {'_id': 0}))
     return render_template('historial.html', documentos=documentos)
 
+# === Login y generación de token JWT ===
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        usuario = request.form['usuario']
 
+        token = jwt.encode(
+            {"usuario": usuario, "exp": datetime.utcnow() + timedelta(hours=2)},
+            SECRET_KEY,
+            algorithm="HS256"
+        )
+
+        return render_template('login.html', token=token, usuario=usuario)
+
+    return render_template('login.html')
+
+# === Función para validar token ===
+def obtener_usuario_desde_token(token):
+    try:
+        datos = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        return datos['usuario']
+    except jwt.ExpiredSignatureError:
+        return None
+    except jwt.InvalidTokenError:
+        return None
+
+# === Descifrado protegido por JWT ===
 @app.route('/descifrar', methods=['GET', 'POST'])
 def descifrar():
     if request.method == 'GET':
         return render_template('descifrar.html')
 
     try:
-        usuario = request.form['usuario']
+        token = request.form['token']
         nombre_imagen = request.form['nombre_imagen']
         llave = request.form['llave']
 
-        # Buscar la imagen cifrada
+        usuario = obtener_usuario_desde_token(token)
+        if not usuario:
+            return jsonify({'error': 'Token inválido o expirado'}), 401
+
         doc = coleccion.find_one({
             'usuario': usuario,
             'nombre_imagen': nombre_imagen
         })
 
         if not doc:
-            return jsonify({'error': 'Imagen no encontrada para ese usuario.'}), 404
+            return jsonify({'error': 'Imagen no encontrada para ese usuario'}), 404
 
         cifrada = doc['imagen_cifrada']
         imagen_bytes = descifrar_imagen(cifrada, llave)
@@ -87,9 +119,8 @@ def descifrar():
 
     except Exception as e:
         print("Error al descifrar:", e)
-        return jsonify({'error': 'No se pudo descifrar. ¿La llave es correcta?'}), 400
+        return jsonify({'error': 'No se pudo descifrar. ¿La llave es correcta o el token válido?'}), 400
 
-
-# === Ejecutar servidor ===
+# === Ejecutar servidor Flask ===
 if __name__ == '__main__':
     app.run(debug=True)
