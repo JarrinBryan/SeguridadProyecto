@@ -1,20 +1,23 @@
-from flask import Flask, request, render_template, jsonify
+import os
+import base64
+import certifi
+import jwt
+import requests
+from io import BytesIO
+from datetime import datetime, timedelta
+from flask import Flask, request, render_template, jsonify, redirect, send_file
 from flask_cors import CORS
 from dotenv import load_dotenv
 from pymongo import MongoClient
-from crypto import cifrar_imagen, descifrar_imagen
-import os
-import certifi
-import base64
-from flask import send_file
-from io import BytesIO
-from datetime import datetime, timedelta
-import jwt  # Asegúrate de que es de PyJWT, no del paquete 'jwt' incorrecto
+from urllib.parse import urlencode
 from bson import ObjectId
+from crypto import cifrar_imagen, descifrar_imagen
 
 # === Cargar variables de entorno ===
 load_dotenv()
 MONGO_URI = os.getenv("MONGO_URI")
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 SECRET_KEY = "super_clave_segura_2025"
 
 # === Conectar a MongoDB Atlas de forma segura ===
@@ -62,32 +65,6 @@ def historial():
     documentos = list(coleccion.find({}, {'_id': 0}))
     return render_template('historial.html', documentos=documentos)
 
-# === Login y generación de token JWT ===
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        usuario = request.form['usuario']
-
-        token = jwt.encode(
-            {"usuario": usuario, "exp": datetime.utcnow() + timedelta(hours=2)},
-            SECRET_KEY,
-            algorithm="HS256"
-        )
-
-        return render_template('login.html', token=token, usuario=usuario)
-
-    return render_template('login.html')
-
-# === Función para validar token ===
-def obtener_usuario_desde_token(token):
-    try:
-        datos = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-        return datos['usuario']
-    except jwt.ExpiredSignatureError:
-        return None
-    except jwt.InvalidTokenError:
-        return None
-
 # === Descifrado protegido por JWT ===
 @app.route('/descifrar', methods=['GET', 'POST'])
 def descifrar():
@@ -100,12 +77,10 @@ def descifrar():
         nombre_imagen = request.form['nombre_imagen']
         llave = request.form['llave']
 
-        # Validar el token
         datos = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-        if datos['usuario'] != usuario:
+        if datos['email'] != usuario:
             return jsonify({'error': 'El token no pertenece a ese usuario.'}), 403
 
-        # Buscar la imagen cifrada
         doc = coleccion.find_one({
             'usuario': usuario,
             'nombre_imagen': nombre_imagen
@@ -127,6 +102,77 @@ def descifrar():
     except Exception as e:
         print("Error al descifrar:", e)
         return jsonify({'error': '❌ No se pudo descifrar. ¿La llave es correcta?'}), 400
+
+# === Redireccionamiento a Google ===
+@app.route("/login_google")
+def login_google():
+    google_auth_endpoint = "https://accounts.google.com/o/oauth2/auth"
+    redirect_uri = "http://127.0.0.1:5000/login"
+    params = {
+        "client_id": GOOGLE_CLIENT_ID,
+        "redirect_uri": redirect_uri,
+        "scope": "openid email profile",
+        "response_type": "code",
+        "access_type": "offline",
+        "prompt": "consent"
+    }
+    return redirect(f"{google_auth_endpoint}?{urlencode(params)}")
+
+# === Callback de Google ===
+@app.route("/login")
+def login():
+    code = request.args.get("code")
+    if not code:
+        return "❌ Código no proporcionado", 400
+
+    # Intercambiar código por token
+    token_endpoint = "https://oauth2.googleapis.com/token"
+    data = {
+        "code": code,
+        "client_id": os.getenv("GOOGLE_CLIENT_ID"),
+        "client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
+        "redirect_uri": "http://127.0.0.1:5000/login",
+        "grant_type": "authorization_code"
+    }
+
+    response = requests.post(token_endpoint, data=data)
+    token_info = response.json()
+    access_token = token_info.get("access_token")
+
+    if not access_token:
+        return "❌ No se pudo obtener el access_token", 400
+
+    # Obtener información del usuario
+    user_info = requests.get(
+        "https://www.googleapis.com/oauth2/v2/userinfo",
+        headers={"Authorization": f"Bearer {access_token}"}
+    ).json()
+
+    email = user_info.get("email")
+    nombre = user_info.get("name")
+
+    # Verificar usuario en la base de datos
+    usuario = db['usuarios'].find_one({"email": email})
+    if not usuario:
+        usuario = {
+            "email": email,
+            "nombre": nombre,
+            "rol": "usuario"
+        }
+        db['usuarios'].insert_one(usuario)
+
+    # Crear token JWT
+    token = jwt.encode(
+        {"email": email, "rol": usuario["rol"], "exp": datetime.utcnow() + timedelta(hours=2)},
+        SECRET_KEY,
+        algorithm="HS256"
+    )
+
+    return jsonify({
+        "mensaje": f"✅ Bienvenido {nombre}",
+        "token": token,
+        "rol": usuario["rol"]
+    })
 
 
 # === Ejecutar servidor Flask ===
