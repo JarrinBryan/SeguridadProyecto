@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import os
 import base64
 import certifi
@@ -21,10 +22,36 @@ GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 SECRET_KEY = "super_clave_segura_2025"
 
 # === Conectar a MongoDB Atlas de forma segura ===
+=======
+from flask import Flask, request, render_template, jsonify, redirect, url_for
+from flask_cors import CORS
+from dotenv import load_dotenv
+from pymongo import MongoClient
+from crypto import cifrar_imagen, descifrar_imagen
+import os
+import certifi
+import base64
+from flask import send_file
+from io import BytesIO
+from datetime import datetime, timedelta
+import jwt
+from bson import ObjectId
+from google.oauth2 import id_token
+from google.auth.transport import requests as grequests
+
+# Cargar variables de entorno
+load_dotenv()
+MONGO_URI = os.getenv("MONGO_URI")
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+SECRET_KEY = "super_clave_segura_2025"
+
+# Conexión a MongoDB
+>>>>>>> 5c1797a0140570cfea40dd90826fd87a41d5f4ee
 client = MongoClient(MONGO_URI, tlsCAFile=certifi.where())
 db = client['ProyectoS']
 coleccion = db['imagenes']
 
+<<<<<<< HEAD
 # === Iniciar aplicación Flask ===
 app = Flask(__name__)
 CORS(app)
@@ -35,6 +62,22 @@ def index():
     return render_template('index.html')
 
 # === Cifrado de imagen ===
+=======
+app = Flask(__name__)
+CORS(app)
+
+# Ruta principal (login)
+@app.route('/')
+def index():
+    return render_template('login.html', google_client_id=GOOGLE_CLIENT_ID)
+
+# Página principal tras el login
+@app.route('/inicio')
+def inicio():
+    return render_template('index.html')
+
+# Cifrar imagen
+>>>>>>> 5c1797a0140570cfea40dd90826fd87a41d5f4ee
 @app.route('/cifrar', methods=['POST'])
 def cifrar():
     try:
@@ -54,18 +97,29 @@ def cifrar():
         })
 
         return jsonify({'mensaje': '✅ Imagen cifrada y guardada correctamente.'})
+<<<<<<< HEAD
 
+=======
+>>>>>>> 5c1797a0140570cfea40dd90826fd87a41d5f4ee
     except Exception as e:
         print("Error en /cifrar:", e)
         return jsonify({'error': '❌ Error al cifrar o guardar la imagen.'}), 500
 
+<<<<<<< HEAD
 # === Historial de imágenes ===
+=======
+# Ver historial
+>>>>>>> 5c1797a0140570cfea40dd90826fd87a41d5f4ee
 @app.route('/historial')
 def historial():
     documentos = list(coleccion.find({}, {'_id': 0}))
     return render_template('historial.html', documentos=documentos)
 
+<<<<<<< HEAD
 # === Descifrado protegido por JWT ===
+=======
+# Página para descifrar
+>>>>>>> 5c1797a0140570cfea40dd90826fd87a41d5f4ee
 @app.route('/descifrar', methods=['GET', 'POST'])
 def descifrar():
     if request.method == 'GET':
@@ -78,7 +132,11 @@ def descifrar():
         llave = request.form['llave']
 
         datos = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+<<<<<<< HEAD
         if datos['email'] != usuario:
+=======
+        if datos['usuario'] != usuario:
+>>>>>>> 5c1797a0140570cfea40dd90826fd87a41d5f4ee
             return jsonify({'error': 'El token no pertenece a ese usuario.'}), 403
 
         doc = coleccion.find_one({
@@ -103,6 +161,7 @@ def descifrar():
         print("Error al descifrar:", e)
         return jsonify({'error': '❌ No se pudo descifrar. ¿La llave es correcta?'}), 400
 
+<<<<<<< HEAD
 # === Redireccionamiento a Google ===
 @app.route("/login_google")
 def login_google():
@@ -178,3 +237,58 @@ def login():
 # === Ejecutar servidor Flask ===
 if __name__ == '__main__':
     app.run(debug=True)
+=======
+# Google login callback (POST)
+
+
+@app.route('/google-login', methods=['POST'])
+def google_login():
+    try:
+        data = request.get_json()
+        token_google = data.get('credential')
+
+        print("TOKEN recibido:", token_google)  # <-- Esta línea debe estar aquí, DENTRO del try
+
+        if not token_google:
+            return jsonify({"error": "❌ Token de Google no proporcionado."}), 400
+
+        idinfo = id_token.verify_oauth2_token(
+            token_google,
+            grequests.Request(),
+            audience=GOOGLE_CLIENT_ID
+        )
+
+        email = idinfo['email']
+        nombre = idinfo.get('name', email)
+
+        usuarios_col = db['usuarios']
+        usuario_db = usuarios_col.find_one({'email': email})
+        if not usuario_db:
+            usuarios_col.insert_one({
+                "email": email,
+                "nombre": nombre,
+                "rol": "usuario",
+                "claveAES": None
+            })
+
+        token = jwt.encode({
+            "usuario": email,
+            "exp": datetime.utcnow() + timedelta(hours=2)
+        }, SECRET_KEY, algorithm="HS256")
+
+        return jsonify({"token": token, "usuario": email, "nombre": nombre})
+
+    except ValueError as ve:
+        print("Token de Google inválido:", ve)
+        return jsonify({"error": "❌ Token inválido o manipulado."}), 400
+    except Exception as e:
+        print("Error inesperado:", e)
+        return jsonify({"error": "❌ Error interno verificando token."}), 500
+    
+    
+
+
+# Ejecutar en localhost
+if __name__ == '__main__':
+    app.run(host='localhost', port=5000, debug=True)
+>>>>>>> 5c1797a0140570cfea40dd90826fd87a41d5f4ee
