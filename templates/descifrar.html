@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Descifrar Imagen</title>
+</head>
+<body>
+    <h1>🔓 Recuperar Imagen</h1>
+    <form method="POST">
+        <label>Token (JWT):</label><br>
+        <textarea name="token" rows="3" cols="60" required></textarea><br><br>
+
+        <label>Nombre de usuario:</label><br>
+        <input type="text" name="usuario" required><br><br>
+
+        <label>Nombre de la imagen:</label><br>
+        <input type="text" name="nombre_imagen" required><br><br>
+
+        <label>Llave de descifrado (AES):</label><br>
+        <input type="password" name="llave" required><br><br>
+
+        <button type="submit">Descifrar Imagen</button>
+    </form>
+
+    <a href="/">← Volver al inicio</a>
+</body>
+</html>

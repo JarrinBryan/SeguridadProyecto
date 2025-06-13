@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Cifrado de Imagen</title>
+</head>
+<body style="font-family: Arial; background-color: #f9f9f9; padding: 30px;">
+
+  <h1>Cifrado de Imágenes con AES</h1>
+
+  <form id="formulario" method="post" enctype="multipart/form-data">
+    <label>Nombre de Usuario:</label><br>
+    <input type="text" name="usuario" required><br><br>
+
+    <label>Nombre personalizado de la imagen:</label><br>
+    <input type="text" name="nombre_imagen" required><br><br>
+
+    <label>Selecciona una imagen:</label><br>
+    <input type="file" name="imagen" required><br><br>
+
+    <label>Llave de cifrado (AES):</label><br>
+    <input type="password" name="llave" required><br><br>
+
+    <button type="submit">Cifrar imagen</button>
+  </form>
+
+  <div id="resultado" style="margin-top:20px; color: green;"></div>
+
+  <br>
+  <a href="/historial">Ver historial</a>
+<br>
+<a href="/descifrar">🔓 Recuperar imagen</a>
+
+  <script>
+    const formulario = document.getElementById('formulario');
+    const resultado = document.getElementById('resultado');
+
+    formulario.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const datos = new FormData(formulario);
+      const res = await fetch('/cifrar', {
+        method: 'POST',
+        body: datos
+      });
+      const json = await res.json();
+      if (json.mensaje) {
+        resultado.innerText = json.mensaje;
+        formulario.reset();  // limpia todo
+      } else {
+        resultado.innerText = json.error || 'Algo falló.';
+      }
+    });
+  </script>
+</body>
+</html>
