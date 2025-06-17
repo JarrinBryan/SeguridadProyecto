@@ -158,7 +158,7 @@ def descifrar():
             cifrada = doc['imagen_cifrada']
             imagen_bytes = descifrar_imagen(cifrada, llave)
 
-            # ✅ Si fue exitoso, eliminamos el bloqueo si existe
+            # Si fue exitoso, eliminamos el bloqueo si existe
             bloqueos.delete_one({'usuario': usuario, 'imagen': nombre_imagen})
 
             imagen_base64 = base64.b64encode(imagen_bytes).decode('utf-8')
