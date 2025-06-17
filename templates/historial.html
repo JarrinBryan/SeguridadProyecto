@@ -1,33 +1,90 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <title>Historial de Imágenes Cifradas</title>
+  <meta charset="UTF-8">
+  <title>Historial de Imágenes Cifradas</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f0f2f5;
+      margin: 0;
+      padding: 40px;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: auto;
+      background: #fff;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+
+    h1 {
+      color: #2c3e50;
+      margin-bottom: 25px;
+    }
+
+    .registro {
+      background-color: #fdfdfd;
+      border: 1px solid #ddd;
+      border-left: 5px solid #2980b9;
+      padding: 15px;
+      margin-bottom: 15px;
+      border-radius: 6px;
+    }
+
+    .registro textarea {
+      width: 100%;
+      font-size: 13px;
+      padding: 6px;
+      color: #333;
+      background-color: #f7f7f7;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+
+    .registro strong {
+      color: #34495e;
+    }
+
+    a {
+      display: inline-block;
+      margin-top: 25px;
+      text-decoration: none;
+      color: #2980b9;
+      font-weight: bold;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .no-data {
+      color: #777;
+      font-style: italic;
+    }
+  </style>
 </head>
-<body style="font-family: Arial; background-color: #f0f0f0; padding: 30px;">
+<body>
+  <div class="container">
+    <h1>📂 Historial de Imágenes Cifradas</h1>
 
-<<<<<<< HEAD
-  <h1>Historial de Imágenes Cifradas</h1>
-=======
-  <h1>📂 Historial de Imágenes Cifradas</h1>
->>>>>>> 5c1797a0140570cfea40dd90826fd87a41d5f4ee
+    {% if documentos %}
+      {% for doc in documentos %}
+        <div class="registro">
+          <p><strong>🧑 Usuario:</strong> {{ doc.usuario }}</p>
+          <p><strong>📁 Nombre de imagen:</strong> {{ doc.nombre_imagen }}</p>
+          <p><strong>🔒 Imagen cifrada:</strong></p>
+          <textarea rows="3" readonly>{{ doc.imagen_cifrada }}</textarea>
+          <p><strong>📅 Fecha:</strong> {{ doc.fecha }}</p>
+        </div>
+      {% endfor %}
+    {% else %}
+      <p class="no-data">No hay imágenes cifradas aún.</p>
+    {% endif %}
 
-  {% if documentos %}
-  <ul>
-    {% for doc in documentos %}
-    <li style="background-color: white; margin: 10px 0; padding: 10px; border: 1px solid #ccc;">
-      <strong>🧑 Usuario:</strong> {{ doc.usuario }}<br>
-      <strong>📁 Nombre de imagen:</strong> {{ doc.nombre_imagen }}<br>
-      <strong>🔒 Imagen cifrada:</strong><br>
-      <textarea rows="3" cols="80" readonly>{{ doc.imagen_cifrada }}</textarea><br>
-      <strong>📅 Fecha:</strong> {{ doc.fecha }}
-    </li>
-    {% endfor %}
-  </ul>
-  {% else %}
-    <p>No hay imágenes cifradas aún.</p>
-  {% endif %}
-
-  <a href="/">🔙 Volver al inicio</a>
+    <a href="/admin">⬅️ Volver al inicio</a>
+  </div>
 </body>
 </html>

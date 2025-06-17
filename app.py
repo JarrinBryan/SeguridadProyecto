@@ -1,28 +1,3 @@
-<<<<<<< HEAD
-import os
-import base64
-import certifi
-import jwt
-import requests
-from io import BytesIO
-from datetime import datetime, timedelta
-from flask import Flask, request, render_template, jsonify, redirect, send_file
-from flask_cors import CORS
-from dotenv import load_dotenv
-from pymongo import MongoClient
-from urllib.parse import urlencode
-from bson import ObjectId
-from crypto import cifrar_imagen, descifrar_imagen
-
-# === Cargar variables de entorno ===
-load_dotenv()
-MONGO_URI = os.getenv("MONGO_URI")
-GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
-GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
-SECRET_KEY = "super_clave_segura_2025"
-
-# === Conectar a MongoDB Atlas de forma segura ===
-=======
 from flask import Flask, request, render_template, jsonify, redirect, url_for
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -46,23 +21,10 @@ GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 SECRET_KEY = "super_clave_segura_2025"
 
 # Conexión a MongoDB
->>>>>>> 5c1797a0140570cfea40dd90826fd87a41d5f4ee
 client = MongoClient(MONGO_URI, tlsCAFile=certifi.where())
 db = client['ProyectoS']
 coleccion = db['imagenes']
 
-<<<<<<< HEAD
-# === Iniciar aplicación Flask ===
-app = Flask(__name__)
-CORS(app)
-
-# === Página principal ===
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-# === Cifrado de imagen ===
-=======
 app = Flask(__name__)
 CORS(app)
 
@@ -74,10 +36,34 @@ def index():
 # Página principal tras el login
 @app.route('/inicio')
 def inicio():
-    return render_template('index.html')
+    token = request.args.get('token') or None
+
+    if not token:
+        return redirect(url_for('index'))
+
+    try:
+        decoded = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        email = decoded.get("usuario")
+
+        usuario_doc = db.usuarios.find_one({"email": email})
+        if not usuario_doc:
+            return "Usuario no encontrado", 404
+
+        nombre = usuario_doc.get("nombre", email)
+        foto = usuario_doc.get("foto", "https://www.gravatar.com/avatar/?d=mp")  # Imagen por defecto si no tiene foto
+        rol = usuario_doc.get("rol", "usuario")
+
+        return render_template('index.html', nombre=nombre, foto=foto, rol=rol, email=email)
+
+    except jwt.ExpiredSignatureError:
+        return "Token expirado. Inicia sesión nuevamente.", 401
+    except jwt.InvalidTokenError:
+        return "Token inválido", 403
+
+
+
 
 # Cifrar imagen
->>>>>>> 5c1797a0140570cfea40dd90826fd87a41d5f4ee
 @app.route('/cifrar', methods=['POST'])
 def cifrar():
     try:
@@ -85,6 +71,15 @@ def cifrar():
         llave = request.form['llave']
         usuario = request.form['usuario']
         nombre_imagen = request.form['nombre_imagen']
+
+        # Validar duplicado
+        existe = coleccion.find_one({
+            'usuario': usuario,
+            'nombre_imagen': nombre_imagen
+        })
+
+        if existe:
+            return jsonify({'error': '❌ Ya existe una imagen con ese nombre. Usa otro nombre único.'}), 400
 
         imagen_bytes = imagen.read()
         cifrada = cifrar_imagen(imagen_bytes, llave)
@@ -97,34 +92,43 @@ def cifrar():
         })
 
         return jsonify({'mensaje': '✅ Imagen cifrada y guardada correctamente.'})
-<<<<<<< HEAD
 
-=======
->>>>>>> 5c1797a0140570cfea40dd90826fd87a41d5f4ee
     except Exception as e:
         print("Error en /cifrar:", e)
         return jsonify({'error': '❌ Error al cifrar o guardar la imagen.'}), 500
 
-<<<<<<< HEAD
-# === Historial de imágenes ===
-=======
+
 # Ver historial
->>>>>>> 5c1797a0140570cfea40dd90826fd87a41d5f4ee
 @app.route('/historial')
 def historial():
     documentos = list(coleccion.find({}, {'_id': 0}))
     return render_template('historial.html', documentos=documentos)
 
-<<<<<<< HEAD
-# === Descifrado protegido por JWT ===
-=======
+# Nueva colección para bloqueos
+bloqueos = db['bloqueos']
+
 # Página para descifrar
->>>>>>> 5c1797a0140570cfea40dd90826fd87a41d5f4ee
 @app.route('/descifrar', methods=['GET', 'POST'])
 def descifrar():
     if request.method == 'GET':
-        return render_template('descifrar.html')
+        token = request.args.get('token')
+        if not token:
+            return redirect(url_for('index'))
 
+        try:
+            datos = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+            email = datos['usuario']
+
+            # Buscar imágenes del usuario
+            imagenes = list(coleccion.find({"usuario": email}, {"_id": 0, "nombre_imagen": 1}))
+            return render_template('descifrar.html', imagenes=imagenes, usuario=email)
+
+        except jwt.ExpiredSignatureError:
+            return "Token expirado", 401
+        except jwt.InvalidTokenError:
+            return "Token inválido", 403
+
+    # POST = intento de descifrado
     try:
         token = request.form['token']
         usuario = request.form['usuario']
@@ -132,12 +136,15 @@ def descifrar():
         llave = request.form['llave']
 
         datos = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-<<<<<<< HEAD
-        if datos['email'] != usuario:
-=======
         if datos['usuario'] != usuario:
->>>>>>> 5c1797a0140570cfea40dd90826fd87a41d5f4ee
-            return jsonify({'error': 'El token no pertenece a ese usuario.'}), 403
+            return jsonify({'error': '❌ El token no pertenece a ese usuario.'}), 403
+
+        ahora = datetime.utcnow()
+        bloqueo = bloqueos.find_one({'usuario': usuario, 'imagen': nombre_imagen})
+
+        if bloqueo and bloqueo.get('bloqueado_hasta') and ahora < bloqueo['bloqueado_hasta']:
+            segundos = int((bloqueo['bloqueado_hasta'] - ahora).total_seconds())
+            return jsonify({'error': f'⏳ Imagen bloqueada temporalmente. Intenta en {segundos} segundos.'}), 403
 
         doc = coleccion.find_one({
             'usuario': usuario,
@@ -147,107 +154,53 @@ def descifrar():
         if not doc:
             return jsonify({'error': 'Imagen no encontrada para ese usuario.'}), 404
 
-        cifrada = doc['imagen_cifrada']
-        imagen_bytes = descifrar_imagen(cifrada, llave)
+        try:
+            cifrada = doc['imagen_cifrada']
+            imagen_bytes = descifrar_imagen(cifrada, llave)
 
-        imagen_base64 = base64.b64encode(imagen_bytes).decode('utf-8')
-        return jsonify({'imagen': imagen_base64})
+            # ✅ Si fue exitoso, eliminamos el bloqueo si existe
+            bloqueos.delete_one({'usuario': usuario, 'imagen': nombre_imagen})
+
+            imagen_base64 = base64.b64encode(imagen_bytes).decode('utf-8')
+            return jsonify({'imagen': imagen_base64})
+
+        except Exception as e:
+            print("Descifrado fallido:", e)
+
+            # Fallo → actualizar contador
+            if not bloqueo:
+                bloqueos.insert_one({
+                    'usuario': usuario,
+                    'imagen': nombre_imagen,
+                    'intentos': 1,
+                    'bloqueado_hasta': None
+                })
+            else:
+                intentos = bloqueo.get('intentos', 0) + 1
+                update = {'intentos': intentos}
+                if intentos >= 3:
+                    update['bloqueado_hasta'] = ahora + timedelta(seconds=30)
+                    update['intentos'] = 0  # reiniciar para el siguiente ciclo
+                bloqueos.update_one({'_id': bloqueo['_id']}, {'$set': update})
+
+            return jsonify({'error': '❌ Llave incorrecta o integridad comprometida.'}), 403
 
     except jwt.ExpiredSignatureError:
-        return jsonify({'error': '❌ El token ha expirado. Inicia sesión nuevamente.'}), 401
+        return jsonify({'error': '❌ El token ha expirado.'}), 401
     except jwt.InvalidTokenError:
-        return jsonify({'error': '❌ Token inválido. Verifica tu autenticación.'}), 401
+        return jsonify({'error': '❌ Token inválido.'}), 401
     except Exception as e:
-        print("Error al descifrar:", e)
-        return jsonify({'error': '❌ No se pudo descifrar. ¿La llave es correcta?'}), 400
+        print("Error general en descifrado:", e)
+        return jsonify({'error': '❌ No se pudo descifrar la imagen.'}), 400
 
-<<<<<<< HEAD
-# === Redireccionamiento a Google ===
-@app.route("/login_google")
-def login_google():
-    google_auth_endpoint = "https://accounts.google.com/o/oauth2/auth"
-    redirect_uri = "http://127.0.0.1:5000/login"
-    params = {
-        "client_id": GOOGLE_CLIENT_ID,
-        "redirect_uri": redirect_uri,
-        "scope": "openid email profile",
-        "response_type": "code",
-        "access_type": "offline",
-        "prompt": "consent"
-    }
-    return redirect(f"{google_auth_endpoint}?{urlencode(params)}")
-
-# === Callback de Google ===
-@app.route("/login")
-def login():
-    code = request.args.get("code")
-    if not code:
-        return "❌ Código no proporcionado", 400
-
-    # Intercambiar código por token
-    token_endpoint = "https://oauth2.googleapis.com/token"
-    data = {
-        "code": code,
-        "client_id": os.getenv("GOOGLE_CLIENT_ID"),
-        "client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
-        "redirect_uri": "http://127.0.0.1:5000/login",
-        "grant_type": "authorization_code"
-    }
-
-    response = requests.post(token_endpoint, data=data)
-    token_info = response.json()
-    access_token = token_info.get("access_token")
-
-    if not access_token:
-        return "❌ No se pudo obtener el access_token", 400
-
-    # Obtener información del usuario
-    user_info = requests.get(
-        "https://www.googleapis.com/oauth2/v2/userinfo",
-        headers={"Authorization": f"Bearer {access_token}"}
-    ).json()
-
-    email = user_info.get("email")
-    nombre = user_info.get("name")
-
-    # Verificar usuario en la base de datos
-    usuario = db['usuarios'].find_one({"email": email})
-    if not usuario:
-        usuario = {
-            "email": email,
-            "nombre": nombre,
-            "rol": "usuario"
-        }
-        db['usuarios'].insert_one(usuario)
-
-    # Crear token JWT
-    token = jwt.encode(
-        {"email": email, "rol": usuario["rol"], "exp": datetime.utcnow() + timedelta(hours=2)},
-        SECRET_KEY,
-        algorithm="HS256"
-    )
-
-    return jsonify({
-        "mensaje": f"✅ Bienvenido {nombre}",
-        "token": token,
-        "rol": usuario["rol"]
-    })
-
-
-# === Ejecutar servidor Flask ===
-if __name__ == '__main__':
-    app.run(debug=True)
-=======
 # Google login callback (POST)
-
-
 @app.route('/google-login', methods=['POST'])
 def google_login():
     try:
         data = request.get_json()
         token_google = data.get('credential')
 
-        print("TOKEN recibido:", token_google)  # <-- Esta línea debe estar aquí, DENTRO del try
+        print("TOKEN recibido:", token_google)
 
         if not token_google:
             return jsonify({"error": "❌ Token de Google no proporcionado."}), 400
@@ -260,35 +213,74 @@ def google_login():
 
         email = idinfo['email']
         nombre = idinfo.get('name', email)
+        foto = idinfo.get('picture', '')  #  AQUI se obtiene la foto
 
         usuarios_col = db['usuarios']
         usuario_db = usuarios_col.find_one({'email': email})
+
         if not usuario_db:
             usuarios_col.insert_one({
                 "email": email,
                 "nombre": nombre,
+                "foto": foto,  #  Guardamos la foto
                 "rol": "usuario",
                 "claveAES": None
             })
+            rol = "usuario"
+        else:
+            rol = usuario_db.get("rol", "usuario")
 
         token = jwt.encode({
             "usuario": email,
             "exp": datetime.utcnow() + timedelta(hours=2)
         }, SECRET_KEY, algorithm="HS256")
 
-        return jsonify({"token": token, "usuario": email, "nombre": nombre})
+        return jsonify({
+            "token": token,
+            "usuario": email,
+            "nombre": nombre,
+            "foto": foto,  # ✅ Enviamos la foto al frontend
+            "redirect": "/admin" if rol == "admin" else "/inicio"
+        })
 
-    except ValueError as ve:
-        print("Token de Google inválido:", ve)
-        return jsonify({"error": "❌ Token inválido o manipulado."}), 400
     except Exception as e:
-        print("Error inesperado:", e)
-        return jsonify({"error": "❌ Error interno verificando token."}), 500
-    
-    
+        print("Error:", e)
+        return jsonify({"error": "❌ Error al autenticar"}), 500
+
+
+def obtener_rol_desde_email(email):
+    usuario = db.usuarios.find_one({"email": email})
+    if usuario:
+        return usuario.get("rol", "usuario")
+    return "usuario"
+
+@app.route('/admin')
+def panel_admin():
+    return render_template('admin.html', nombre="Administrador", rol="admin")
+
+@app.route('/admin/usuarios')
+def admin_usuarios():
+    usuarios = list(db.usuarios.find({}, {'_id': 0}))  # sin _id
+    return render_template('admin_usuarios.html', usuarios=usuarios)
+
+@app.route('/admin/estadisticas')
+def admin_estadisticas():
+    total_usuarios = db.usuarios.count_documents({})
+    total_imagenes = coleccion.count_documents({})
+
+    # Obtener cantidad de imágenes por usuario
+    pipeline = [
+        {"$group": {"_id": "$usuario", "total": {"$sum": 1}}},
+        {"$sort": {"total": -1}}
+    ]
+    imagenes_por_usuario = list(coleccion.aggregate(pipeline))
+
+    return render_template("admin_estadisticas.html",
+                           total_usuarios=total_usuarios,
+                           total_imagenes=total_imagenes,
+                           imagenes_por_usuario=imagenes_por_usuario)
 
 
 # Ejecutar en localhost
 if __name__ == '__main__':
     app.run(host='localhost', port=5000, debug=True)
->>>>>>> 5c1797a0140570cfea40dd90826fd87a41d5f4ee

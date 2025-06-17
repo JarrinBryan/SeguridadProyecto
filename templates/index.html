@@ -2,34 +2,120 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Cifrado de Imagen</title>
+  <title>Panel del Usuario</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f4;
+      margin: 0;
+      padding: 0;
+    }
+    header {
+      background-color: #2196F3;
+      color: white;
+      padding: 10px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .usuario-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    header img {
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+    }
+    main {
+      padding: 30px;
+    }
+    form {
+      background-color: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    label {
+      font-weight: bold;
+    }
+    input, button {
+      margin-top: 5px;
+      margin-bottom: 15px;
+      width: 100%;
+      padding: 8px;
+      box-sizing: border-box;
+    }
+    button {
+      background-color: #2196F3;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-size: 16px;
+      border-radius: 4px;
+    }
+    button:hover {
+      background-color: #1976D2;
+    }
+    #resultado {
+      margin-top: 20px;
+      font-weight: bold;
+    }
+    .cerrar {
+      color: white;
+      text-decoration: none;
+      margin-left: 15px;
+    }
+  </style>
 </head>
-<body style="font-family: Arial; background-color: #f9f9f9; padding: 30px;">
+<body>
 
-  <h1>Cifrado de Imágenes con AES</h1>
+  <header>
+    <div class="usuario-info">
+      <img src="{{ foto }}" alt="Foto de perfil">
+      <span> {{ nombre }}</span>
+    </div>
+    <div>
+      <a class="cerrar" href="/">Cerrar sesión</a>
+    </div>
+  </header>
 
-  <form id="formulario" method="post" enctype="multipart/form-data">
-    <label>Nombre de Usuario:</label><br>
-    <input type="text" name="usuario" required><br><br>
+  <main>
+    <h2>🔐 Cifrado de Imágenes con AES</h2>
 
-    <label>Nombre personalizado de la imagen:</label><br>
-    <input type="text" name="nombre_imagen" required><br><br>
+    <form id="formulario" method="post" enctype="multipart/form-data">
+      <input type="hidden" name="usuario" value="{{ email }}">
 
-    <label>Selecciona una imagen:</label><br>
-    <input type="file" name="imagen" required><br><br>
+      <label>Nombre personalizado de la imagen:</label>
+      <input type="text" name="nombre_imagen" required>
 
-    <label>Llave de cifrado (AES):</label><br>
-    <input type="password" name="llave" required><br><br>
+      <label>Selecciona una imagen (JPG o PNG):</label>
+      <input type="file" name="imagen" accept=".jpg,.jpeg,.png" required>
 
-    <button type="submit">Cifrar imagen</button>
-  </form>
+      <label>Llave de cifrado (AES):</label>
+      <input type="password" name="llave" required>
 
-  <div id="resultado" style="margin-top:20px; color: green;"></div>
+      <button type="submit">Cifrar imagen</button>
+    </form>
 
-  <br>
-  <a href="/historial">Ver historial</a>
-<br>
-<a href="/descifrar">🔓 Recuperar imagen</a>
+    <div id="resultado"></div>
+
+    <br>
+    <a href="#" onclick="redirigirADescifrar()">🔓 Recuperar imagen</a>
+
+<script>
+  function redirigirADescifrar() {
+    const token = localStorage.getItem('token');
+    if (token) {
+      window.location.href = `/descifrar?token=${token}`;
+    } else {
+      alert("❌ Debes iniciar sesión para acceder.");
+    }
+  }
+</script>
+
+  </main>
 
   <script>
     const formulario = document.getElementById('formulario');
@@ -37,18 +123,16 @@
 
     formulario.addEventListener('submit', async (e) => {
       e.preventDefault();
+
       const datos = new FormData(formulario);
       const res = await fetch('/cifrar', {
         method: 'POST',
         body: datos
       });
+
       const json = await res.json();
-      if (json.mensaje) {
-        resultado.innerText = json.mensaje;
-        formulario.reset();  // limpia todo
-      } else {
-        resultado.innerText = json.error || 'Algo falló.';
-      }
+      resultado.innerText = json.mensaje || json.error || 'Algo falló.';
+      if (json.mensaje) formulario.reset();
     });
   </script>
 </body>

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Estadísticas del sistema</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #eef6f9;
+      padding: 40px;
+    }
+
+    .container {
+      max-width: 700px;
+      margin: auto;
+      background: #fff;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+
+    h1 {
+      color: #2980b9;
+    }
+
+    h3 {
+      margin-top: 30px;
+    }
+
+    ul {
+      padding-left: 20px;
+    }
+
+    li {
+      margin-bottom: 10px;
+    }
+
+    a {
+      display: inline-block;
+      margin-top: 20px;
+      text-decoration: none;
+      color: #2980b9;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📊 Estadísticas del sistema</h1>
+
+    <p><strong>Total de usuarios registrados:</strong> {{ total_usuarios }}</p>
+    <p><strong>Total de imágenes cifradas:</strong> {{ total_imagenes }}</p>
+
+    <h3>Imágenes por usuario:</h3>
+    <ul>
+      {% for item in imagenes_por_usuario %}
+        <li><strong>{{ item._id }}:</strong> {{ item.total }} imagen(es)</li>
+      {% endfor %}
+    </ul>
+
+    <a href="/admin">⬅️ Volver al panel</a>
+  </div>
+</body>
+</html>

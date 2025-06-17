@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Panel de Administración</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #fff3e0;
+      margin: 0;
+      padding: 40px;
+    }
+
+    .container {
+      max-width: 700px;
+      margin: auto;
+      background: #fff;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+
+    h1 {
+      color: #e67e22;
+      margin-bottom: 25px;
+    }
+
+    ul {
+      list-style-type: none;
+      padding: 0;
+    }
+
+    li {
+      margin: 15px 0;
+    }
+
+    a {
+      text-decoration: none;
+      color: #2c3e50;
+      font-size: 18px;
+      padding: 10px 15px;
+      border-radius: 6px;
+      display: inline-block;
+      background-color: #f0f0f0;
+      transition: background 0.2s;
+    }
+
+    a:hover {
+      background-color: #e0e0e0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Bienvenido Administrador</h1>
+    <ul>
+      <li><a href="/historial">📜 Ver historial completo</a></li>
+      <li><a href="/">🚪 Cerrar sesión</a></li>
+      <li><a href="/admin/usuarios">👥 Ver usuarios registrados</a></li>
+      <li><a href="/admin/estadisticas">📊 Ver estadísticas</a></li>
+    </ul>
+  </div>
+</body>
+</html>

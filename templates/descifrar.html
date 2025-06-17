@@ -1,31 +1,75 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <title>Descifrar Imagen</title>
+  <meta charset="UTF-8">
+  <title>🔓 Recuperar imágenes</title>
+  <style>
+    body { font-family: Arial; padding: 20px; background-color: #f4f4f4; }
+    .imagen-box {
+      background: white;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 6px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    button {
+      padding: 6px 10px;
+      margin-top: 10px;
+      background-color: #2196F3;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    img {
+      max-width: 200px;
+      max-height: 200px;
+      display: block;
+      margin-top: 10px;
+    }
+  </style>
 </head>
 <body>
-    <h1>🔓 Recuperar Imagen</h1>
-    <form method="POST">
-        <label>Token (JWT):</label><br>
-        <textarea name="token" rows="3" cols="60" required></textarea><br><br>
+  <h1>🔓 Recuperar tus imágenes cifradas</h1>
 
-        <label>Nombre de usuario:</label><br>
-        <input type="text" name="usuario" required><br><br>
+  {% for img in imagenes %}
+  <div class="imagen-box">
+    <strong>📁 Nombre:</strong> {{ img.nombre_imagen }}<br>
+    <label>🔑 Ingresa tu llave:</label>
+    <input type="password" id="llave_{{ loop.index }}">
+    <button onclick="descifrar('{{ img.nombre_imagen }}', '{{ usuario }}', {{ loop.index }})">Descifrar imagen</button>
+    <br>
+    <img id="img_{{ loop.index }}" style="display:none;">
+    <p id="error_{{ loop.index }}" style="color: red;"></p>
+  </div>
+  {% endfor %}
 
-        <label>Nombre de la imagen:</label><br>
-        <input type="text" name="nombre_imagen" required><br><br>
+  <script>
+    async function descifrar(nombre, usuario, index) {
+      const llave = document.getElementById('llave_' + index).value;
+      const token = localStorage.getItem('token');
 
-        <label>Llave de descifrado (AES):</label><br>
-        <input type="password" name="llave" required><br><br>
+      const res = await fetch('/descifrar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          token: token,
+          usuario: usuario,
+          nombre_imagen: nombre,
+          llave: llave
+        })
+      });
 
-        <button type="submit">Descifrar Imagen</button>
-    </form>
-
-<<<<<<< HEAD
-    <a href="/">Volver al inicio</a>
-=======
-    <a href="/">← Volver al inicio</a>
->>>>>>> 5c1797a0140570cfea40dd90826fd87a41d5f4ee
+      const data = await res.json();
+      if (data.imagen) {
+        const imgTag = document.getElementById('img_' + index);
+        imgTag.src = 'data:image/png;base64,' + data.imagen;
+        imgTag.style.display = 'block';
+        document.getElementById('error_' + index).innerText = '';
+      } else {
+        document.getElementById('error_' + index).innerText = data.error || '❌ Error';
+      }
+    }
+  </script>
 </body>
 </html>
