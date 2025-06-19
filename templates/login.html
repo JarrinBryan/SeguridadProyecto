@@ -47,7 +47,7 @@
   <div class="login-container">
     <h2>🔐 Inicia sesión con Google</h2>
 
-    <!-- Google Login -->
+    <!-- Configuración del botón de Google -->
     <div id="g_id_onload"
          data-client_id="{{ google_client_id }}"
          data-context="signin"
@@ -81,13 +81,14 @@
           localStorage.setItem('usuario', data.usuario);
           localStorage.setItem('nombre', data.nombre);
 
+          // Redirige al panel según el rol
           if (data.redirect) {
             window.location.href = data.redirect + "?token=" + encodeURIComponent(data.token);
           } else {
             alert("No se pudo redirigir. Rol desconocido.");
           }
         } else {
-          alert('❌ Error: ' + data.error);
+          alert('❌ Error: ' + (data.error || 'No se pudo iniciar sesión'));
         }
       })
       .catch(error => {

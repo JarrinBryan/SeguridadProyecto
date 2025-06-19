@@ -13,6 +13,7 @@ import jwt
 from bson import ObjectId
 from google.oauth2 import id_token
 from google.auth.transport import requests as grequests
+import re
 
 # Cargar variables de entorno
 load_dotenv()
@@ -27,6 +28,19 @@ coleccion = db['imagenes']
 
 app = Flask(__name__)
 CORS(app)
+
+# Validación robusta de clave
+
+def validar_clave_segura(clave):
+    if len(clave) < 6:
+        return False, "La clave debe tener al menos 6 caracteres."
+    if not re.search(r"[A-Z]", clave):
+        return False, "La clave debe contener al menos una letra mayúscula."
+    if not re.search(r"[a-z]", clave):
+        return False, "La clave debe contener al menos una letra minúscula."
+    if not re.search(r"[0-9]", clave):
+        return False, "La clave debe contener al menos un número."
+    return True, ""
 
 # Ruta principal (login)
 @app.route('/')
@@ -62,6 +76,13 @@ def inicio():
 
 
 
+# Función para validar tipo de imagen permitida
+def es_imagen_valida(nombre_archivo, mimetype):
+    extensiones_permitidas = ['.jpg', '.jpeg', '.png']
+    mimetypes_permitidos = ['image/jpeg', 'image/png']
+
+    _, extension = os.path.splitext(nombre_archivo.lower())
+    return extension in extensiones_permitidas and mimetype in mimetypes_permitidos
 
 # Cifrar imagen
 @app.route('/cifrar', methods=['POST'])
@@ -72,12 +93,20 @@ def cifrar():
         usuario = request.form['usuario']
         nombre_imagen = request.form['nombre_imagen']
 
-        # Validar duplicado
+        # ✅ Validar tipo de archivo
+        if not es_imagen_valida(imagen.filename, imagen.mimetype):
+            return jsonify({'error': '❌ Solo se permiten archivos .jpg, .jpeg o .png'}), 400
+
+        # ✅ Validar robustez de la clave
+        valido, mensaje = validar_clave_segura(llave)
+        if not valido:
+            return jsonify({'error': f'❌ Clave insegura: {mensaje}'}), 400
+
+        # ✅ Validar duplicado
         existe = coleccion.find_one({
             'usuario': usuario,
             'nombre_imagen': nombre_imagen
         })
-
         if existe:
             return jsonify({'error': '❌ Ya existe una imagen con ese nombre. Usa otro nombre único.'}), 400
 
@@ -173,14 +202,22 @@ def descifrar():
                     'usuario': usuario,
                     'imagen': nombre_imagen,
                     'intentos': 1,
+                    'intentos_totales': 1,
                     'bloqueado_hasta': None
                 })
             else:
                 intentos = bloqueo.get('intentos', 0) + 1
-                update = {'intentos': intentos}
+                intentos_totales = bloqueo.get('intentos_totales', 0) + 1
+
+                update = {
+                    'intentos': intentos,
+                    'intentos_totales': intentos_totales
+                }
+
                 if intentos >= 3:
                     update['bloqueado_hasta'] = ahora + timedelta(seconds=30)
                     update['intentos'] = 0  # reiniciar para el siguiente ciclo
+
                 bloqueos.update_one({'_id': bloqueo['_id']}, {'$set': update})
 
             return jsonify({'error': '❌ Llave incorrecta o integridad comprometida.'}), 403
