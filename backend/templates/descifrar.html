@@ -35,9 +35,9 @@
   {% for img in imagenes %}
   <div class="imagen-box">
     <strong>📁 Nombre:</strong> {{ img.nombre_imagen }}<br>
-    <label>🔑 Ingresa tu llave:</label>
-    <input type="password" id="llave_{{ loop.index }}">
-    <button onclick="descifrar('{{ img.nombre_imagen }}', '{{ usuario }}', {{ loop.index }})">Descifrar imagen</button>
+    <button onclick="descifrar('{{ img.nombre_imagen }}', '{{ usuario }}', {{ loop.index }})">
+      🔍 Ver imagen descifrada
+    </button>
     <br>
     <img id="img_{{ loop.index }}" style="display:none;">
     <p id="error_{{ loop.index }}" style="color: red;"></p>
@@ -46,7 +46,6 @@
 
   <script>
     async function descifrar(nombre, usuario, index) {
-      const llave = document.getElementById('llave_' + index).value;
       const token = localStorage.getItem('token');
 
       const res = await fetch('/descifrar', {
@@ -55,8 +54,7 @@
         body: new URLSearchParams({
           token: token,
           usuario: usuario,
-          nombre_imagen: nombre,
-          llave: llave
+          nombre_imagen: nombre
         })
       });
 

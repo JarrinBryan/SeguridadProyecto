@@ -45,6 +45,16 @@
     a:hover {
       text-decoration: underline;
     }
+
+    .btn-descarga {
+      display: inline-block;
+      margin-top: 20px;
+      padding: 10px 20px;
+      background-color: #2980b9;
+      color: white;
+      text-decoration: none;
+      border-radius: 5px;
+    }
   </style>
 </head>
 <body>
@@ -61,6 +71,9 @@
       {% endfor %}
     </ul>
 
+    <a href="/descargar_reporte" class="btn-descarga">📄 Descargar reporte en PDF</a>
+    
+    <br>
     <a href="/admin">⬅️ Volver al panel</a>
   </div>
 </body>

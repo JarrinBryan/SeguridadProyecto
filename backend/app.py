@@ -1,12 +1,10 @@
-from flask import Flask, request, render_template, jsonify, redirect, url_for
+from flask import Flask, request, render_template, jsonify, redirect, url_for, send_file
 from flask_cors import CORS
 from dotenv import load_dotenv
 from pymongo import MongoClient
-from crypto import cifrar_imagen, descifrar_imagen
 import os
 import certifi
 import base64
-from flask import send_file
 from io import BytesIO
 from datetime import datetime, timedelta
 import jwt
@@ -14,6 +12,17 @@ from bson import ObjectId
 from google.oauth2 import id_token
 from google.auth.transport import requests as grequests
 import re
+import traceback
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.pagesizes import letter
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet
+from PIL import Image
+import io
+from backend.crypto import cifrar_imagen_auto, descifrar_imagen_auto
+
+
+
 
 # Cargar variables de entorno
 load_dotenv()
@@ -29,8 +38,6 @@ coleccion = db['imagenes']
 app = Flask(__name__)
 CORS(app)
 
-# Validación robusta de clave
-
 def validar_clave_segura(clave):
     if len(clave) < 6:
         return False, "La clave debe tener al menos 6 caracteres."
@@ -42,127 +49,114 @@ def validar_clave_segura(clave):
         return False, "La clave debe contener al menos un número."
     return True, ""
 
-# Ruta principal (login)
+def es_imagen_valida(nombre_archivo, mimetype):
+    extensiones_permitidas = ['.jpg', '.jpeg', '.png']
+    mimetypes_permitidos = ['image/jpeg', 'image/png']
+    _, extension = os.path.splitext(nombre_archivo.lower())
+    return extension in extensiones_permitidas and mimetype in mimetypes_permitidos
+
 @app.route('/')
 def index():
     return render_template('login.html', google_client_id=GOOGLE_CLIENT_ID)
 
-# Página principal tras el login
 @app.route('/inicio')
 def inicio():
     token = request.args.get('token') or None
-
     if not token:
         return redirect(url_for('index'))
-
     try:
         decoded = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
         email = decoded.get("usuario")
-
         usuario_doc = db.usuarios.find_one({"email": email})
         if not usuario_doc:
             return "Usuario no encontrado", 404
-
         nombre = usuario_doc.get("nombre", email)
-        foto = usuario_doc.get("foto", "https://www.gravatar.com/avatar/?d=mp")  # Imagen por defecto si no tiene foto
+        foto = usuario_doc.get("foto", "https://www.gravatar.com/avatar/?d=mp")
         rol = usuario_doc.get("rol", "usuario")
-
         return render_template('index.html', nombre=nombre, foto=foto, rol=rol, email=email)
-
     except jwt.ExpiredSignatureError:
         return "Token expirado. Inicia sesión nuevamente.", 401
     except jwt.InvalidTokenError:
         return "Token inválido", 403
 
+from backend.utils import cifrar_clave # al inicio
 
-
-# Función para validar tipo de imagen permitida
-def es_imagen_valida(nombre_archivo, mimetype):
-    extensiones_permitidas = ['.jpg', '.jpeg', '.png']
-    mimetypes_permitidos = ['image/jpeg', 'image/png']
-
-    _, extension = os.path.splitext(nombre_archivo.lower())
-    return extension in extensiones_permitidas and mimetype in mimetypes_permitidos
-
-# Cifrar imagen
 @app.route('/cifrar', methods=['POST'])
 def cifrar():
     try:
         imagen = request.files['imagen']
-        llave = request.form['llave']
         usuario = request.form['usuario']
         nombre_imagen = request.form['nombre_imagen']
 
-        # ✅ Validar tipo de archivo
         if not es_imagen_valida(imagen.filename, imagen.mimetype):
             return jsonify({'error': '❌ Solo se permiten archivos .jpg, .jpeg o .png'}), 400
 
-        # ✅ Validar robustez de la clave
-        valido, mensaje = validar_clave_segura(llave)
-        if not valido:
-            return jsonify({'error': f'❌ Clave insegura: {mensaje}'}), 400
-
-        # ✅ Validar duplicado
-        existe = coleccion.find_one({
-            'usuario': usuario,
-            'nombre_imagen': nombre_imagen
-        })
-        if existe:
-            return jsonify({'error': '❌ Ya existe una imagen con ese nombre. Usa otro nombre único.'}), 400
+        if coleccion.find_one({'usuario': usuario, 'nombre_imagen': nombre_imagen}):
+            return jsonify({'error': '❌ Ya existe una imagen con ese nombre. Usa otro.'}), 400
 
         imagen_bytes = imagen.read()
-        cifrada = cifrar_imagen(imagen_bytes, llave)
+        resultado = cifrar_imagen_auto(imagen_bytes)
+
+        # 🔐 Cifrar la clave antes de guardarla
+        clave_segura = cifrar_clave(resultado['clave'])
 
         coleccion.insert_one({
             'usuario': usuario,
             'nombre_imagen': nombre_imagen,
-            'imagen_cifrada': cifrada,
+            'imagen_cifrada': resultado['imagen_cifrada'],
+            'iv': resultado['iv'],
+            'clave': clave_segura,
             'fecha': datetime.now()
         })
 
-        return jsonify({'mensaje': '✅ Imagen cifrada y guardada correctamente.'})
+        # Visualización
+        cifrada_bytes = base64.b64decode(resultado['imagen_cifrada'])
+        try:
+            lado = int(len(cifrada_bytes) ** 0.5)
+            cifrada_imagen = Image.frombytes('L', (lado, lado), cifrada_bytes[:lado * lado])
+        except:
+            cifrada_imagen = Image.new('L', (128, 128))
 
+        buffer = io.BytesIO()
+        cifrada_imagen.save(buffer, format="PNG")
+        base64_cifrada_img = base64.b64encode(buffer.getvalue()).decode('utf-8')
+
+        return render_template('clave_generada.html', imagen_cifrada=base64_cifrada_img)
+    
     except Exception as e:
-        print("Error en /cifrar:", e)
-        return jsonify({'error': '❌ Error al cifrar o guardar la imagen.'}), 500
+        print("Error en /cifrar automático:", e)
+        traceback.print_exc()
+        return jsonify({'error': '❌ Fallo al cifrar la imagen.'}), 500
 
-
-# Ver historial
 @app.route('/historial')
 def historial():
     documentos = list(coleccion.find({}, {'_id': 0}))
     return render_template('historial.html', documentos=documentos)
 
-# Nueva colección para bloqueos
 bloqueos = db['bloqueos']
 
-# Página para descifrar
+from backend.utils import descifrar_clave # al inicio
+
 @app.route('/descifrar', methods=['GET', 'POST'])
 def descifrar():
     if request.method == 'GET':
         token = request.args.get('token')
         if not token:
             return redirect(url_for('index'))
-
         try:
             datos = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
             email = datos['usuario']
-
-            # Buscar imágenes del usuario
             imagenes = list(coleccion.find({"usuario": email}, {"_id": 0, "nombre_imagen": 1}))
             return render_template('descifrar.html', imagenes=imagenes, usuario=email)
-
         except jwt.ExpiredSignatureError:
             return "Token expirado", 401
         except jwt.InvalidTokenError:
             return "Token inválido", 403
 
-    # POST = intento de descifrado
     try:
         token = request.form['token']
         usuario = request.form['usuario']
         nombre_imagen = request.form['nombre_imagen']
-        llave = request.form['llave']
 
         datos = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
         if datos['usuario'] != usuario:
@@ -170,24 +164,24 @@ def descifrar():
 
         ahora = datetime.utcnow()
         bloqueo = bloqueos.find_one({'usuario': usuario, 'imagen': nombre_imagen})
-
         if bloqueo and bloqueo.get('bloqueado_hasta') and ahora < bloqueo['bloqueado_hasta']:
             segundos = int((bloqueo['bloqueado_hasta'] - ahora).total_seconds())
             return jsonify({'error': f'⏳ Imagen bloqueada temporalmente. Intenta en {segundos} segundos.'}), 403
 
-        doc = coleccion.find_one({
-            'usuario': usuario,
-            'nombre_imagen': nombre_imagen
-        })
-
+        doc = coleccion.find_one({'usuario': usuario, 'nombre_imagen': nombre_imagen})
         if not doc:
             return jsonify({'error': 'Imagen no encontrada para ese usuario.'}), 404
 
         try:
             cifrada = doc['imagen_cifrada']
-            imagen_bytes = descifrar_imagen(cifrada, llave)
+            iv = doc.get('iv')
+            clave_cifrada = doc.get('clave')
 
-            # Si fue exitoso, eliminamos el bloqueo si existe
+            # 🔐 Descifrar la clave AES con clave maestra
+            clave = descifrar_clave(clave_cifrada)
+
+            imagen_bytes = descifrar_imagen_auto(cifrada, clave, iv)
+
             bloqueos.delete_one({'usuario': usuario, 'imagen': nombre_imagen})
 
             imagen_base64 = base64.b64encode(imagen_bytes).decode('utf-8')
@@ -195,8 +189,7 @@ def descifrar():
 
         except Exception as e:
             print("Descifrado fallido:", e)
-
-            # Fallo → actualizar contador
+            # manejar intentos y bloqueos
             if not bloqueo:
                 bloqueos.insert_one({
                     'usuario': usuario,
@@ -208,19 +201,16 @@ def descifrar():
             else:
                 intentos = bloqueo.get('intentos', 0) + 1
                 intentos_totales = bloqueo.get('intentos_totales', 0) + 1
-
                 update = {
                     'intentos': intentos,
                     'intentos_totales': intentos_totales
                 }
-
                 if intentos >= 3:
                     update['bloqueado_hasta'] = ahora + timedelta(seconds=30)
-                    update['intentos'] = 0  # reiniciar para el siguiente ciclo
-
+                    update['intentos'] = 0
                 bloqueos.update_one({'_id': bloqueo['_id']}, {'$set': update})
 
-            return jsonify({'error': '❌ Llave incorrecta o integridad comprometida.'}), 403
+            return jsonify({'error': '❌ Fallo al descifrar. Posible integridad comprometida.'}), 403
 
     except jwt.ExpiredSignatureError:
         return jsonify({'error': '❌ El token ha expirado.'}), 401
@@ -229,6 +219,7 @@ def descifrar():
     except Exception as e:
         print("Error general en descifrado:", e)
         return jsonify({'error': '❌ No se pudo descifrar la imagen.'}), 400
+
 
 # Google login callback (POST)
 @app.route('/google-login', methods=['POST'])
@@ -317,7 +308,82 @@ def admin_estadisticas():
                            total_imagenes=total_imagenes,
                            imagenes_por_usuario=imagenes_por_usuario)
 
+@app.route('/descargar_reporte')
+def descargar_reporte():
+    try:
+        # Obtener datos desde Mongo
+        pipeline = [{"$group": {"_id": "$usuario", "total": {"$sum": 1}}}]
+        resultados = list(coleccion.aggregate(pipeline))
+        total_usuarios = len(resultados)
+        total_imagenes = coleccion.count_documents({})
+
+        # Crear PDF en memoria
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=letter)
+        styles = getSampleStyleSheet()
+        elements = []
+
+        # Título y fecha
+        elements.append(Paragraph("📊 <b>Reporte de Estadísticas del Sistema</b>", styles['Title']))
+        elements.append(Spacer(1, 12))
+        elements.append(Paragraph(f"📅 Fecha: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}", styles['Normal']))
+        elements.append(Spacer(1, 20))
+
+        # Tabla de resumen
+        resumen_data = [
+            ["Total de usuarios registrados", total_usuarios],
+            ["Total de imágenes cifradas", total_imagenes]
+        ]
+        resumen_table = Table(resumen_data, colWidths=[300, 150])
+        resumen_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.lightblue),
+            ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 0), (-1, -1), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+        ]))
+        elements.append(Paragraph("<b>Resumen general:</b>", styles['Heading2']))
+        elements.append(resumen_table)
+        elements.append(Spacer(1, 20))
+
+        # Tabla por usuario
+        tabla_data = [["Usuario", "Cantidad de imágenes"]]
+        for item in resultados:
+            tabla_data.append([item["_id"], str(item["total"])])
+
+        tabla = Table(tabla_data, colWidths=[300, 150])
+        tabla.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.darkblue),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 13),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+        ]))
+        elements.append(Paragraph("<b>Imágenes por usuario:</b>", styles['Heading2']))
+        elements.append(tabla)
+
+        # Construir documento
+        doc.build(elements)
+
+        # Volver al inicio del buffer
+        buffer.seek(0)
+
+        return send_file(
+            buffer,
+            as_attachment=True,
+            download_name='reporte_estadisticas.pdf',
+            mimetype='application/pdf'
+        )
+
+    except Exception as e:
+          print("⚠️ Error al generar el PDF:", e)
+    traceback.print_exc()  # <- esto muestra el error completo en consola
+    return jsonify({'error': 'No se pudo generar el PDF'}), 500
 
 # Ejecutar en localhost
-if __name__ == '__main__':
-    app.run(host='localhost', port=5000, debug=True)
+#if __name__ == '__main__':
+   # app.run(host='localhost', port=5000, debug=True)

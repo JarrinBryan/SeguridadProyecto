@@ -67,6 +67,11 @@
       text-decoration: none;
       margin-left: 15px;
     }
+    .alerta {
+      color: red;
+      font-weight: bold;
+      margin-bottom: 15px;
+    }
   </style>
 </head>
 <body>
@@ -74,7 +79,7 @@
   <header>
     <div class="usuario-info">
       <img src="{{ foto }}" alt="Foto de perfil">
-      <span> {{ nombre }}</span>
+      <span>{{ nombre }}</span>
     </div>
     <div>
       <a class="cerrar" href="/">Cerrar sesión</a>
@@ -84,7 +89,7 @@
   <main>
     <h2>🔐 Cifrado de Imágenes con AES</h2>
 
-    <form id="formulario" method="post" enctype="multipart/form-data">
+    <form method="POST" action="/cifrar" enctype="multipart/form-data">
       <input type="hidden" name="usuario" value="{{ email }}">
 
       <label>Nombre personalizado de la imagen:</label>
@@ -93,47 +98,27 @@
       <label>Selecciona una imagen (JPG o PNG):</label>
       <input type="file" name="imagen" accept=".jpg,.jpeg,.png" required>
 
-      <label>Llave de cifrado (AES):</label>
-      <input type="password" name="llave" required>
+      <div class="alerta">
+        ⚠️ La clave AES será generada automáticamente y se mostrará una sola vez. ¡Guárdala con cuidado!
+      </div>
 
       <button type="submit">Cifrar imagen</button>
     </form>
 
-    <div id="resultado"></div>
-
     <br>
     <a href="#" onclick="redirigirADescifrar()">🔓 Recuperar imagen</a>
 
-<script>
-  function redirigirADescifrar() {
-    const token = localStorage.getItem('token');
-    if (token) {
-      window.location.href = `/descifrar?token=${token}`;
-    } else {
-      alert("❌ Debes iniciar sesión para acceder.");
-    }
-  }
-</script>
+    <script>
+      function redirigirADescifrar() {
+        const token = localStorage.getItem('token');
+        if (token) {
+          window.location.href = `/descifrar?token=${token}`;
+        } else {
+          alert("❌ Debes iniciar sesión para acceder.");
+        }
+      }
+    </script>
 
   </main>
-
-  <script>
-    const formulario = document.getElementById('formulario');
-    const resultado = document.getElementById('resultado');
-
-    formulario.addEventListener('submit', async (e) => {
-      e.preventDefault();
-
-      const datos = new FormData(formulario);
-      const res = await fetch('/cifrar', {
-        method: 'POST',
-        body: datos
-      });
-
-      const json = await res.json();
-      resultado.innerText = json.mensaje || json.error || 'Algo falló.';
-      if (json.mensaje) formulario.reset();
-    });
-  </script>
 </body>
 </html>
