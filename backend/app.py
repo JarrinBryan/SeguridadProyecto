@@ -79,7 +79,7 @@ def inicio():
     except jwt.InvalidTokenError:
         return "Token inválido", 403
 
-from backend.utils import cifrar_clave # al inicio
+from backend.utils import cifrar_clave, generar_hmac  # ✅ añadimos generar_hmac
 
 @app.route('/cifrar', methods=['POST'])
 def cifrar():
@@ -97,15 +97,20 @@ def cifrar():
         imagen_bytes = imagen.read()
         resultado = cifrar_imagen_auto(imagen_bytes)
 
-        # 🔐 Cifrar la clave antes de guardarla
+        # ✅ Generamos la firma HMAC ANTES de cifrar la clave
+        firma_hmac = generar_hmac(resultado['imagen_cifrada'], resultado['clave'])
+
+        # 🔐 Ciframos la clave para almacenarla protegida
         clave_segura = cifrar_clave(resultado['clave'])
 
+        # ✅ Guardamos también la firma HMAC
         coleccion.insert_one({
             'usuario': usuario,
             'nombre_imagen': nombre_imagen,
             'imagen_cifrada': resultado['imagen_cifrada'],
             'iv': resultado['iv'],
             'clave': clave_segura,
+            'firma_hmac': firma_hmac,
             'fecha': datetime.now()
         })
 
@@ -136,6 +141,8 @@ def historial():
 bloqueos = db['bloqueos']
 
 from backend.utils import descifrar_clave # al inicio
+
+from backend.utils import descifrar_clave, verificar_hmac  # ✅ Asegúrate de tener esto arriba
 
 @app.route('/descifrar', methods=['GET', 'POST'])
 def descifrar():
@@ -176,9 +183,14 @@ def descifrar():
             cifrada = doc['imagen_cifrada']
             iv = doc.get('iv')
             clave_cifrada = doc.get('clave')
+            firma_guardada = doc.get('firma_hmac')  # ✅ Obtenemos la firma HMAC guardada
 
-            # 🔐 Descifrar la clave AES con clave maestra
+            # 🔐 Descifrar la clave AES
             clave = descifrar_clave(clave_cifrada)
+
+            # 🔍 Validar integridad con HMAC
+            if not verificar_hmac(cifrada, clave, firma_guardada):
+                return jsonify({'error': '⚠️ Integridad comprometida: imagen modificada o clave incorrecta.'}), 403
 
             imagen_bytes = descifrar_imagen_auto(cifrada, clave, iv)
 

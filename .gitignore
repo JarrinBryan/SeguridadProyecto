@@ -1,0 +1,14 @@
+# Ignorar archivos confidenciales
+.env
+
+# Archivos de Python no necesarios
+__pycache__/
+*.pyc
+*.pyo
+
+# Entornos virtuales
+.venv/
+env/
+
+# Archivos temporales de VSCode
+.vscode/
