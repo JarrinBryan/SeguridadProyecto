@@ -161,7 +161,7 @@ def descifrar():
         token = request.form['token']
         usuario = request.form['usuario']
         nombre_imagen = request.form['nombre_imagen']
-        llave_usuario = request.form['llave']  # ✅ ahora se recibe desde el formulario
+        llave_usuario = request.form['llave']
 
         datos = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
         if datos['usuario'] != usuario:
@@ -184,18 +184,37 @@ def descifrar():
             firma_guardada = doc['firma_hmac']
             hash_guardado = doc['clave_hash']
 
-            # 🔐 Validar que el hash de la clave ingresada coincida
+            # 🔐 Validar el hash de la clave ingresada
             hash_ingresado = hashlib.sha256(llave_usuario.encode()).hexdigest()
             if hash_ingresado != hash_guardado:
+                if not bloqueo:
+                    bloqueos.insert_one({
+                        'usuario': usuario,
+                        'imagen': nombre_imagen,
+                        'intentos': 1,
+                        'intentos_totales': 1,
+                        'bloqueado_hasta': None
+                    })
+                else:
+                    intentos = bloqueo.get('intentos', 0) + 1
+                    intentos_totales = bloqueo.get('intentos_totales', 0) + 1
+                    update = {
+                        'intentos': intentos,
+                        'intentos_totales': intentos_totales
+                    }
+                    if intentos >= 3:
+                        update['bloqueado_hasta'] = ahora + timedelta(seconds=30)
+                        update['intentos'] = 0
+                    bloqueos.update_one({'_id': bloqueo['_id']}, {'$set': update})
+
                 return jsonify({'error': '⚠️ Llave incorrecta o alterada.'}), 403
 
-            # 🔍 Verificar integridad
+            # 🔍 Verificar HMAC
             if not verificar_hmac(cifrada, llave_usuario, firma_guardada):
                 return jsonify({'error': '⚠️ Integridad comprometida: imagen modificada o clave incorrecta.'}), 403
 
-            # ✅ Descifrar imagen usando clave base, IV y salt
+            # ✅ Descifrado exitoso
             imagen_bytes = descifrar_imagen_auto(cifrada, llave_usuario, iv, salt)
-
             bloqueos.delete_one({'usuario': usuario, 'imagen': nombre_imagen})
 
             imagen_base64 = base64.b64encode(imagen_bytes).decode('utf-8')
