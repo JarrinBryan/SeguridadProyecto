@@ -105,13 +105,14 @@ def cifrar():
         # 🧠 Hash SHA-256 de la clave original
         hash_clave = hashlib.sha256(resultado['clave'].encode()).hexdigest()
 
-        # 📦 Guardar en MongoDB
+        # 📦 Guardar en MongoDB (con salt incluido)
         coleccion.insert_one({
             'usuario': usuario,
             'nombre_imagen': nombre_imagen,
             'imagen_cifrada': resultado['imagen_cifrada'],
             'iv': resultado['iv'],
-            'clave_hash': hash_clave,      # solo guardamos el hash
+            'salt': resultado['salt'],  # ✅ AÑADIDO AQUÍ
+            'clave_hash': hash_clave,
             'firma_hmac': firma_hmac,
             'fecha': datetime.now()
         })
@@ -126,6 +127,7 @@ def cifrar():
         print("Error en /cifrar automático:", e)
         traceback.print_exc()
         return jsonify({'error': '❌ Fallo al cifrar la imagen.'}), 500
+
 
 
 @app.route('/historial')
@@ -159,6 +161,7 @@ def descifrar():
         token = request.form['token']
         usuario = request.form['usuario']
         nombre_imagen = request.form['nombre_imagen']
+        llave_usuario = request.form['llave']  # ✅ ahora se recibe desde el formulario
 
         datos = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
         if datos['usuario'] != usuario:
@@ -176,18 +179,22 @@ def descifrar():
 
         try:
             cifrada = doc['imagen_cifrada']
-            iv = doc.get('iv')
-            clave_cifrada = doc.get('clave')
-            firma_guardada = doc.get('firma_hmac')  # ✅ Obtenemos la firma HMAC guardada
+            iv = doc['iv']
+            salt = doc['salt']
+            firma_guardada = doc['firma_hmac']
+            hash_guardado = doc['clave_hash']
 
-            # 🔐 Descifrar la clave AES
-            clave = descifrar_clave(clave_cifrada)
+            # 🔐 Validar que el hash de la clave ingresada coincida
+            hash_ingresado = hashlib.sha256(llave_usuario.encode()).hexdigest()
+            if hash_ingresado != hash_guardado:
+                return jsonify({'error': '⚠️ Llave incorrecta o alterada.'}), 403
 
-            # 🔍 Validar integridad con HMAC
-            if not verificar_hmac(cifrada, clave, firma_guardada):
+            # 🔍 Verificar integridad
+            if not verificar_hmac(cifrada, llave_usuario, firma_guardada):
                 return jsonify({'error': '⚠️ Integridad comprometida: imagen modificada o clave incorrecta.'}), 403
 
-            imagen_bytes = descifrar_imagen_auto(cifrada, clave, iv)
+            # ✅ Descifrar imagen usando clave base, IV y salt
+            imagen_bytes = descifrar_imagen_auto(cifrada, llave_usuario, iv, salt)
 
             bloqueos.delete_one({'usuario': usuario, 'imagen': nombre_imagen})
 
@@ -196,7 +203,6 @@ def descifrar():
 
         except Exception as e:
             print("Descifrado fallido:", e)
-            # manejar intentos y bloqueos
             if not bloqueo:
                 bloqueos.insert_one({
                     'usuario': usuario,
