@@ -20,6 +20,8 @@ from reportlab.lib.styles import getSampleStyleSheet
 from PIL import Image
 import io
 from backend.crypto import cifrar_imagen_auto, descifrar_imagen_auto
+from flask import make_response  
+import hashlib
 
 
 
@@ -97,41 +99,34 @@ def cifrar():
         imagen_bytes = imagen.read()
         resultado = cifrar_imagen_auto(imagen_bytes)
 
-        # ✅ Generamos la firma HMAC ANTES de cifrar la clave
+        # ✅ Firma HMAC con clave original
         firma_hmac = generar_hmac(resultado['imagen_cifrada'], resultado['clave'])
 
-        # 🔐 Ciframos la clave para almacenarla protegida
-        clave_segura = cifrar_clave(resultado['clave'])
+        # 🧠 Hash SHA-256 de la clave original
+        hash_clave = hashlib.sha256(resultado['clave'].encode()).hexdigest()
 
-        # ✅ Guardamos también la firma HMAC
+        # 📦 Guardar en MongoDB
         coleccion.insert_one({
             'usuario': usuario,
             'nombre_imagen': nombre_imagen,
             'imagen_cifrada': resultado['imagen_cifrada'],
             'iv': resultado['iv'],
-            'clave': clave_segura,
+            'clave_hash': hash_clave,      # solo guardamos el hash
             'firma_hmac': firma_hmac,
             'fecha': datetime.now()
         })
 
-        # Visualización
-        cifrada_bytes = base64.b64decode(resultado['imagen_cifrada'])
-        try:
-            lado = int(len(cifrada_bytes) ** 0.5)
-            cifrada_imagen = Image.frombytes('L', (lado, lado), cifrada_bytes[:lado * lado])
-        except:
-            cifrada_imagen = Image.new('L', (128, 128))
+        # ✅ Enviar la clave original como archivo descargable
+        response = make_response(resultado['clave'])
+        response.headers['Content-Type'] = 'text/plain'
+        response.headers['Content-Disposition'] = 'attachment; filename=clave_AES.txt'
+        return response
 
-        buffer = io.BytesIO()
-        cifrada_imagen.save(buffer, format="PNG")
-        base64_cifrada_img = base64.b64encode(buffer.getvalue()).decode('utf-8')
-
-        return render_template('clave_generada.html', imagen_cifrada=base64_cifrada_img)
-    
     except Exception as e:
         print("Error en /cifrar automático:", e)
         traceback.print_exc()
         return jsonify({'error': '❌ Fallo al cifrar la imagen.'}), 500
+
 
 @app.route('/historial')
 def historial():
