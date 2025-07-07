@@ -110,7 +110,7 @@ def cifrar():
             'usuario': usuario,
             'nombre_imagen': nombre_imagen,
             'imagen_cifrada': resultado['imagen_cifrada'],
-            'iv': resultado['iv'],
+            
             'salt': resultado['salt'],  # ✅ AÑADIDO AQUÍ
             'clave_hash': hash_clave,
             'firma_hmac': firma_hmac,
@@ -177,51 +177,14 @@ def descifrar():
         if not doc:
             return jsonify({'error': 'Imagen no encontrada para ese usuario.'}), 404
 
-        try:
-            cifrada = doc['imagen_cifrada']
-            iv = doc['iv']
-            salt = doc['salt']
-            firma_guardada = doc['firma_hmac']
-            hash_guardado = doc['clave_hash']
+        cifrada = doc['imagen_cifrada']
+        salt = doc['salt']
+        firma_guardada = doc['firma_hmac']
+        hash_guardado = doc['clave_hash']
 
-            # 🔐 Validar el hash de la clave ingresada
-            hash_ingresado = hashlib.sha256(llave_usuario.encode()).hexdigest()
-            if hash_ingresado != hash_guardado:
-                if not bloqueo:
-                    bloqueos.insert_one({
-                        'usuario': usuario,
-                        'imagen': nombre_imagen,
-                        'intentos': 1,
-                        'intentos_totales': 1,
-                        'bloqueado_hasta': None
-                    })
-                else:
-                    intentos = bloqueo.get('intentos', 0) + 1
-                    intentos_totales = bloqueo.get('intentos_totales', 0) + 1
-                    update = {
-                        'intentos': intentos,
-                        'intentos_totales': intentos_totales
-                    }
-                    if intentos >= 3:
-                        update['bloqueado_hasta'] = ahora + timedelta(seconds=30)
-                        update['intentos'] = 0
-                    bloqueos.update_one({'_id': bloqueo['_id']}, {'$set': update})
-
-                return jsonify({'error': '⚠️ Llave incorrecta o alterada.'}), 403
-
-            # 🔍 Verificar HMAC
-            if not verificar_hmac(cifrada, llave_usuario, firma_guardada):
-                return jsonify({'error': '⚠️ Integridad comprometida: imagen modificada o clave incorrecta.'}), 403
-
-            # ✅ Descifrado exitoso
-            imagen_bytes = descifrar_imagen_auto(cifrada, llave_usuario, iv, salt)
-            bloqueos.delete_one({'usuario': usuario, 'imagen': nombre_imagen})
-
-            imagen_base64 = base64.b64encode(imagen_bytes).decode('utf-8')
-            return jsonify({'imagen': imagen_base64})
-
-        except Exception as e:
-            print("Descifrado fallido:", e)
+        # Validar el hash de la clave ingresada
+        hash_ingresado = hashlib.sha256(llave_usuario.encode()).hexdigest()
+        if hash_ingresado != hash_guardado:
             if not bloqueo:
                 bloqueos.insert_one({
                     'usuario': usuario,
@@ -242,7 +205,18 @@ def descifrar():
                     update['intentos'] = 0
                 bloqueos.update_one({'_id': bloqueo['_id']}, {'$set': update})
 
-            return jsonify({'error': '❌ Fallo al descifrar. Posible integridad comprometida.'}), 403
+            return jsonify({'error': '⚠️ Llave incorrecta o alterada.'}), 403
+
+        # Verificar integridad con HMAC
+        if not verificar_hmac(cifrada, llave_usuario, firma_guardada):
+            return jsonify({'error': '⚠️ Integridad comprometida: imagen modificada o clave incorrecta.'}), 403
+
+        # Descifrado exitoso
+        imagen_bytes = descifrar_imagen_auto(cifrada, llave_usuario, salt)
+        bloqueos.delete_one({'usuario': usuario, 'imagen': nombre_imagen})
+
+        imagen_base64 = base64.b64encode(imagen_bytes).decode('utf-8')
+        return jsonify({'imagen': imagen_base64})
 
     except jwt.ExpiredSignatureError:
         return jsonify({'error': '❌ El token ha expirado.'}), 401
@@ -251,7 +225,6 @@ def descifrar():
     except Exception as e:
         print("Error general en descifrado:", e)
         return jsonify({'error': '❌ No se pudo descifrar la imagen.'}), 400
-
 
 # Google login callback (POST)
 @app.route('/google-login', methods=['POST'])

@@ -26,31 +26,36 @@ def cifrar_imagen_auto(imagen_bytes):
     cipher = AES.new(clave, AES.MODE_CBC, iv)
     cifrado = cipher.encrypt(imagen_bytes)
 
-    # 6. Devolver datos codificados
+    # ✅ 6. Prepend IV al cifrado
+    cifrado_con_iv = iv + cifrado
+
+    # 7. Devolver datos codificados
     return {
-        'imagen_cifrada': base64.b64encode(cifrado).decode('utf-8'),
+        'imagen_cifrada': base64.b64encode(cifrado_con_iv).decode('utf-8'),
         'clave': base64.b64encode(clave_base).decode('utf-8'),  # Solo la clave base
-        'iv': base64.b64encode(iv).decode('utf-8'),
         'salt': base64.b64encode(salt).decode('utf-8')  # Salt para derivación
     }
 
 # =============================
 # DESCIFRADO AUTOMÁTICO DE IMAGEN
 # =============================
-def descifrar_imagen_auto(cifrada_b64, clave_base_b64, iv_b64, salt_b64):
+def descifrar_imagen_auto(cifrada_b64, clave_base_b64, salt_b64):
     # 1. Decodificar todo de base64
-    cifrado = base64.b64decode(cifrada_b64)
+    cifrado_con_iv = base64.b64decode(cifrada_b64)
     clave_base = base64.b64decode(clave_base_b64)
-    iv = base64.b64decode(iv_b64)
     salt = base64.b64decode(salt_b64)
 
-    # 2. Derivar la misma clave AES con PBKDF2
+    # ✅ 2. Extraer IV (primeros 16 bytes) y el resto como cifrado
+    iv = cifrado_con_iv[:16]
+    cifrado = cifrado_con_iv[16:]
+
+    # 3. Derivar la misma clave AES con PBKDF2
     clave = PBKDF2(clave_base, salt, dkLen=32, count=100_000)
 
-    # 3. Descifrar
+    # 4. Descifrar
     cipher = AES.new(clave, AES.MODE_CBC, iv)
     imagen_descifrada = cipher.decrypt(cifrado)
 
-    # 4. Eliminar padding
+    # 5. Eliminar padding
     padding_len = imagen_descifrada[-1]
     return imagen_descifrada[:-padding_len]
